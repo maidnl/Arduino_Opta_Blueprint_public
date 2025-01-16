@@ -800,7 +800,7 @@ void Controller::checkForExpansions() {
     for(unsigned int i = 0; i < exp_type_list.size(); i++) {
       exp_type_list[i].enableStartUpCallback();
     }    
-    assign_custom_type_and_call_start_up();
+    
 
 #if defined DEBUG_SERIAL && defined DEBUG_ASSIGN_ADDRESS_CONTROLLER
     Serial.print("FINAL Number of expansions found ");
@@ -822,6 +822,8 @@ void Controller::checkForExpansions() {
         expansions[i] = nullptr;
       }
     }    
+
+    assign_custom_type_and_call_start_up();
 
 #if defined DEBUG_SERIAL && defined DEBUG_ASSIGN_ADDRESS_CONTROLLER
     Serial.println();

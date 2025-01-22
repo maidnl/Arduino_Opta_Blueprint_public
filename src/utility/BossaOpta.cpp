@@ -71,6 +71,7 @@ bool BossaOpta::begin(HardwareSerial &serial, Controller *c, uint8_t device,
       if (reboot) {
         DEBUG_INFO("Rebooting device...");
         if (ctrl->rebootExpansion(device)) {
+          delay(1000);
           DEBUG_INFO(" OK!");
           DEBUG_INFO("Connecting to bootloader...");
           if (!_samba.connect(port, 115200)) {

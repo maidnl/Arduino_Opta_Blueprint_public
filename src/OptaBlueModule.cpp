@@ -548,7 +548,9 @@ void Module::updatePinStatus() {
 
     setStatusLedReadyForAddress();
     /* detect_in (toward Controller) as Output */
+    #ifndef ARDUINO_ARDUINO_NANO33BLE
     pinMode(detect_in, OUTPUT);
+    #endif
     /* put detect in pin to LOW -> signal the MODULE wants an address */
     digitalWrite(detect_in, LOW);
   } else {

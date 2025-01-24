@@ -15,7 +15,9 @@
 #include "utility/BossaOpta.h"
 #include "fwUpdateDigital.h"
 #include "fwUpdateAnalog.h"
+#include "fwUpdateCellular.h"
 #include "BossaArduino.h"
+#include "CellularExpansion.h"
 
 /* if this is defined the sketch will ask for a confirmation via serial to 
  * actually perform the fw update */
@@ -44,8 +46,12 @@ static unsigned char od_m = opta_digital_fw_update[od_fw_size + 2];
 static unsigned char od_r = opta_digital_fw_update[od_fw_size + 3];
 static unsigned int  od_version = od_M * 255 + od_m * 255 + od_r;
 
-static char *fileptr = nullptr;
-
+static uint32_t oc_fw_size = sizeof(opta_cellular_fw_update) - 4;
+static unsigned char oc_type = opta_cellular_fw_update[oc_fw_size];
+static unsigned char oc_M = opta_cellular_fw_update[oc_fw_size + 1];
+static unsigned char oc_m = opta_cellular_fw_update[oc_fw_size + 2];
+static unsigned char oc_r = opta_cellular_fw_update[oc_fw_size + 3];
+static unsigned int  oc_version = oc_M * 255 + oc_m * 255 + oc_r;
 
 /* print the expansion type */
 void printExpansionType(ExpansionType_t t) {
@@ -63,6 +69,9 @@ void printExpansionType(ExpansionType_t t) {
   }
   else if(t == EXPANSION_OPTA_ANALOG) {
     Serial.print("Opta ~~~ ANALOG ~~~ ");
+  }
+  else if (t == OptaController.getExpansionType(CellularExpansion::getProduct())) {
+    Serial.print("Opta ~~~ CELLULAR ~~~ ");
   }
   else {
     Serial.print("Unknown!");
@@ -85,7 +94,7 @@ bool isUpdatable(int device) {
    Serial.print("\nDevice n. ");
    Serial.print(device);
    Serial.print(" type ");
-   ExpansionType_t type = OptaController.getExpansionType(device);
+   uint8_t type = OptaController.getExpansionType(device);
    printExpansionType(type);
 
    if(OptaController.getFwVersion(device,M,m,r)) {
@@ -98,6 +107,10 @@ bool isUpdatable(int device) {
          }
       } else if(EXPANSION_OPTA_ANALOG == type) {
          if(oa_version > current_version ) {
+            rv = true;
+         }
+      } else if(OptaController.getExpansionType(CellularExpansion::getProduct()) == type) {
+         if(oc_version > current_version ) {
             rv = true;
          }
       }
@@ -153,14 +166,16 @@ void updateTask() {
                unsigned char *fw = nullptr;
                uint32_t sz = 0;
 
-               
-               ExpansionType_t type = OptaController.getExpansionType(i);
+               uint8_t type = OptaController.getExpansionType(i);
                if(EXPANSION_OPTA_DIGITAL_MEC == type || EXPANSION_OPTA_DIGITAL_STS == type) {
                   fw = (unsigned char *)opta_digital_fw_update;
                   sz = od_fw_size;
                } else if(EXPANSION_OPTA_ANALOG == type) {
                   fw = (unsigned char *)opta_analog_fw_update;
                   sz = oa_fw_size;
+               } else if (type == OptaController.getExpansionType(CellularExpansion::getProduct())) {
+                  fw = (unsigned char *)opta_cellular_fw_update;
+                  sz = oc_fw_size;
                }
                
                if(sz == 0 || fw == nullptr) {
@@ -169,40 +184,32 @@ void updateTask() {
 
                Serial.print("REBOOTING expansion: ");
 
-             
-                  
-                  if(BOSSA.begin(BossaSerial,&OptaController,i)) {
-                     Serial.println("BOSSA correctly initialized");
-                     #ifdef ASK_FOR_FW_UPDATE
-                     if(ask_for_confirmation(i)) {
-                        if(BOSSA.flash(fw,sz)) {
-                           Serial.println("UPDATE successfully performed... reset board");
-                           BOSSA.reset();
-                           
-                        }
-                        else {
-                           BOSSA.reset();
-                           
-                        }
+               if(BOSSA.begin(BossaSerial,&OptaController,i)) {
+                  Serial.println("BOSSA correctly initialized");
+                  #ifdef ASK_FOR_FW_UPDATE
+                  if(ask_for_confirmation(i)) {
+                     if(BOSSA.flash(fw,sz)) {
+                        Serial.println("UPDATE successfully performed... reset board");
+                        BOSSA.reset();
                      }
                      else {
                         BOSSA.reset();
-                       
                      }
-                     #else
-                     if(BOSSA.flash(fw,sz)) {
-                           Serial.println("UPDATE successfully performed... reset board");
-                        BOSSA.reset();
-                       
-                     }
-                     #endif
                   }
                   else {
-                     Serial.println("FAILED to initialize BOSSA...");
                      BOSSA.reset();
-                    
                   }
-               
+                  #else
+                  if(BOSSA.flash(fw,sz)) {
+                        Serial.println("UPDATE successfully performed... reset board");
+                     BOSSA.reset();
+                  }
+                  #endif
+               }
+               else {
+                  Serial.println("FAILED to initialize BOSSA...");
+                  BOSSA.reset();
+               }
             }
          }
       }
@@ -219,6 +226,10 @@ void updateTask() {
 /* -------------------------------------------------------------------------- */
 void setup() {
 /* -------------------------------------------------------------------------- */    
+  OptaController.registerCustomExpansion(CellularExpansion::getProduct(),
+                                         CellularExpansion::makeExpansion,
+                                         CellularExpansion::startUp);
+
   Serial.begin(115200);
   while(!Serial) {
   }
@@ -231,7 +242,14 @@ void setup() {
   Serial.print("  - OPTA ** ANALOG ** to version: ");
   printVersion(oa_M, oa_m, oa_r);
 
-  OptaController.begin(); 
+  Serial.print("  - OPTA ** CELLULAR ** to version: ");
+  printVersion(oc_M, oc_m, oc_r);
+
+  delay(1000);
+
+  OptaController.begin();
+
+  delay(2000); 
 }
 
 /* -------------------------------------------------------------------------- */
@@ -242,8 +260,6 @@ void loop() {
   /* update function will be called each OPTA_CONTROLLER_UPDATE_RATE ms */
   OptaController.update();
   updateTask();
-
-  
 }
 
 

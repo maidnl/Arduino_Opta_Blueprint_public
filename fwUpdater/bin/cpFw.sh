@@ -10,6 +10,7 @@
 
 OAPATH="./fwUpdateAnalog.h"
 ODPATH="./fwUpdateDigital.h"
+OCPATH="./fwUpdateCellular.h"
 DST="../../examples/updateExpansionFw/"
 
 if [ -f $OAPATH ]; then
@@ -24,4 +25,11 @@ if [ -f $ODPATH ]; then
 	 mv $ODPATH $DST 
 else
     echo "File $ODPATH not found"
+fi
+
+if [ -f $OCPATH ]; then
+    echo "Moving $OCPATH to fw updater sketch folder ($DST)"
+     mv $OCPATH $DST 
+else
+    echo "File $OCPATH not found"
 fi

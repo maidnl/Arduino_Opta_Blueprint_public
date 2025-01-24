@@ -16,10 +16,12 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <stdint.h>
 using namespace std;
 
 #define EXP_TYPE_DIGITAL 1
 #define EXP_TYPE_ANALOG 2
+#define EXP_TYPE_CELLULAR 3
 
 int getUserNumber(bool &good) {
   string usr_string;
@@ -59,12 +61,21 @@ int print_single_char_on_file(FILE *fp, unsigned char ch, bool comma = true) {
 static const char fileOutDefault[] = "fwUpdate.h";
 static const char fileOutAnalog[] = "fwUpdateAnalog.h";
 static const char fileOutDigital[] = "fwUpdateDigital.h";
+static const char fileOutCellular[] = "fwUpdateCellular.h";
+
+static const char nameDefault[] ="UNKNOWN";
+static const char nameAnalog[] = "ANALOG";
+static const char nameDigital[] = "DIGITAL";
+static const char nameCellular[] = "CELLULAR";
 
 static const unsigned char OA_header[] =
     "const unsigned char opta_analog_fw_update[] = {";
 static const unsigned char OD_header[] =
     "const unsigned char opta_digital_fw_update[] = {";
+static const unsigned char OC_header[] =
+    "const unsigned char opta_cellular_fw_update[] = {";    
 
+/* __________________________________________________________________________ */
 bool write_update(const char *filename, unsigned char e_type, unsigned char M,
                   unsigned char m, unsigned char r, unsigned char *fw,
                   uint32_t fw_size) {
@@ -83,7 +94,9 @@ bool write_update(const char *filename, unsigned char e_type, unsigned char M,
     fprintf(fp, "%s\n", OA_header);
   } else if (e_type == EXP_TYPE_DIGITAL) {
     fprintf(fp, "%s\n", OD_header);
-  } else {
+  } else if (e_type == EXP_TYPE_CELLULAR) {
+    fprintf(fp, "%s\n", OC_header);
+  }else {
     cout << "ERROR Unrecognized option" << endl;
     rv = false;
     goto EXIT_WRITE_UPDATE;
@@ -119,108 +132,58 @@ EXIT_WRITE_UPDATE:
   return rv;
 }
 
-int main(int argc, char *argv[]) {
-  unsigned char exp_type = 0;
-  unsigned char fw_version_major = 0;
-  unsigned char fw_version_minor = 0;
-  unsigned char fw_version_release = 0;
-  bool finished = false;
-  char *outfilename = (char *)fileOutDefault;
-  string filename;
-  uint32_t fsize = 0;
-  uint32_t oa_size = 0;
-  uint32_t od_size = 0;
-  unsigned char *oa_fcontent = nullptr;
-  unsigned char *od_fcontent = nullptr;
+/* __________________________________________________________________________ */
+bool print_expansion_selection(int sel) {
+  bool rv = true;
+  if (sel == EXP_TYPE_ANALOG) {
+    cout << "\n--> *** ANALOG *** expansion type selected" << endl;  
+  } else if (sel == EXP_TYPE_DIGITAL) {
+    cout << "\n--> *** DIGITAL *** expansion type selected" << endl;
+  } else if (sel == EXP_TYPE_CELLULAR) {
+    cout << "\n--> *** CELLULAR *** expansion type selected" << endl;    
+  } 
+  else {
+    cout << ">> ERROR unrecognized option!" << endl;
+    rv = false;
+  }
+  return rv;
+}
 
-  cout << "*** Opta Fw Update Maker ***" << endl;
-  cout << endl;
-  cout << "This program packs an Expansions fw into .h files" << endl;
-  cout << "NOTE: Both expansions (analog and digital) fw update are requested"
-       << endl;
-  cout << endl;
+/* __________________________________________________________________________ */
+int select_expansion(bool &good) {
+  cout << "Please select the type of expansion:" << endl;
+  cout << " 1. OPTA DIGITAL " << endl;
+  cout << " 2. OPTA ANALOG " << endl;
+  cout << " 3. OPTA CELLULAR " << endl;
+  cout << "Or type 0 to exit " << endl;
+  cout << ":> ";
+  int rv = getUserNumber(good);
+  return rv; 
+}
 
-  while (!finished) {
+/* __________________________________________________________________________ */
+unsigned char get_version_digit(const char *type) {
+  bool good = false;
+  int rv = 0;
 
-    bool good = false;
-    /*
-     * GET THE EXPANSION TYPE
-     * */
-    if (oa_fcontent == nullptr && od_fcontent == nullptr) {
-      cout << "Please select the type of expansion:" << endl;
-      cout << " 1. OPTA DIGITAL " << endl;
-      cout << " 2. OPTA ANALOG " << endl;
-      cout << ":> ";
-
-      exp_type = (unsigned char)getUserNumber(good);
-      if (!good) {
-        continue;
-      }
-    } else {
-      if (oa_fcontent == nullptr) {
-        exp_type = 2;
-      } else if (od_fcontent == nullptr) {
-        exp_type = 1;
-      } else {
-        cout << "ERROR: Unexpected status!" << endl;
-        finished = true;
-        continue;
-      }
-    }
-
-    if (exp_type == EXP_TYPE_ANALOG) {
-      if (oa_fcontent == nullptr) {
-        cout << "\n--> *** ANALOG *** expansion type selected" << endl;
-      }
-    } else if (exp_type == EXP_TYPE_DIGITAL) {
-      if (od_fcontent == nullptr) {
-        cout << "\n--> *** DIGITAL *** expansion type selected" << endl;
-      }
-    } else {
-      cout << ">> ERROR unrecognized option!" << endl;
-      continue;
-    }
-
-  GET_MAJOR:
-    /*
-     * getting the version
-     */
-    cout << "Please Enter the Major number of the expansion FW release:"
-         << endl;
+  while(!good) {
+    cout << "Please enter the ";
+    cout << type;
+    cout << " number of the FW release: " << endl;
     cout << ":> ";
-
-    good = false;
-    fw_version_major = (unsigned char)getUserNumber(good);
-    if (!good) {
-      goto GET_MAJOR;
+    rv = (unsigned char)getUserNumber(good);
+    if(!good) {
+      cout << "\n -> malformed expression" << endl;
     }
-  GET_MINOR:
-    cout << "Please Enter the Minor number of the expansion FW release:"
-         << endl;
-    cout << ":> ";
+  }
+  return rv;
+}
 
-    good = false;
-    fw_version_minor = (unsigned char)getUserNumber(good);
-    if (!good) {
-      goto GET_MINOR;
-    }
-  GET_RELEASE:
-    cout << "Please Enter the Release number of the expansion FW release:"
-         << endl;
-    cout << ":> ";
+/* __________________________________________________________________________ */
+void get_fw_filename(string &filename, uint32_t &fsize) {
 
-    good = false;
-    fw_version_release = (unsigned char)getUserNumber(good);
-    if (!good) {
-      goto GET_RELEASE;
-    }
-
-    cout << "You entered the FW version: " << (int)fw_version_major << "."
-         << (int)fw_version_minor << "." << (int)fw_version_release << endl;
-
-  GET_BINARY:
-
-    cout << "Please Enter the path the FW (bin format) is located" << endl;
+  while(1) {
+    cout << "Please Enter the path where FW (bin format) is located" << endl;
     cout << ":> ";
     cin >> filename;
 
@@ -228,77 +191,109 @@ int main(int argc, char *argv[]) {
     if (stat(filename.c_str(), &info) != 0) {
       cout << "ERROR Unable to stat file! (Did you enter the correct path?)"
            << endl;
-      goto GET_BINARY;
     }
-
-    FILE *fp = fopen(filename.c_str(), "r+b");
-    if (fp == nullptr) {
-      cout << "ERROR Unable to open the file " << filename << endl;
-      goto GET_BINARY;
-    }
-
-    fsize = info.st_size;
-
-    if (exp_type == EXP_TYPE_ANALOG) {
-
-      oa_fcontent = new unsigned char[fsize];
-      if (oa_fcontent == NULL) {
-        cout << "ERROR Unable to allocate memory... Exit" << endl;
-        exit(1);
-      }
-      size_t blocks_read = fread(oa_fcontent, fsize, 1, fp);
-      if (blocks_read != 1) {
-        cout << "ERROR! Unable to read all the file" << endl;
-        exit(2);
-      }
-      fclose(fp);
-      oa_size = fsize;
-      outfilename = (char *)fileOutAnalog;
-      if (!write_update(fileOutAnalog, exp_type, fw_version_major,
-                        fw_version_minor, fw_version_release, oa_fcontent,
-                        oa_size)) {
-        cout << "ERROR Unable to write update on file " << outfilename << endl;
-        exit(3);
-      }
-
-    } else if (exp_type == EXP_TYPE_DIGITAL) {
-      od_fcontent = new unsigned char[fsize];
-      if (od_fcontent == NULL) {
-        cout << "ERROR Unable to allocate memory... Exit" << endl;
-        exit(4);
-      }
-      size_t blocks_read = fread(od_fcontent, fsize, 1, fp);
-      if (blocks_read != 1) {
-        cout << "ERROR! Unable to read all the file" << endl;
-        exit(5);
-      }
-      fclose(fp);
-      od_size = fsize;
-      outfilename = (char *)fileOutDigital;
-      if (!write_update(fileOutDigital, exp_type, fw_version_major,
-                        fw_version_minor, fw_version_release, od_fcontent,
-                        od_size)) {
-        cout << "ERROR Unable to write update on file " << outfilename << endl;
-        exit(6);
-      }
-    }
-    if (oa_fcontent != nullptr && od_fcontent != nullptr) {
-
-      delete[] oa_fcontent;
-      oa_fcontent = nullptr;
-      delete[] od_fcontent;
-      od_fcontent = nullptr;
-      // EXIT
-      finished = true;
+    else {
+      fsize = info.st_size;
+      break;
     }
   }
+}
 
-  cout << "\n**** REPORT: " << endl;
+/* __________________________________________________________________________ */
+unsigned char *read_fw_filename(string &filename, uint32_t fsize) {
+  FILE *fp = fopen(filename.c_str(), "r+b");
+  if (fp == nullptr) {
+    cout << "ERROR Unable to open the file " << filename << endl;
+    exit(1);
+  }
 
-  cout << "+ ANALOG EXPANSION fw update saved on file:" << endl;
-  cout << "  ---> " << fileOutAnalog << endl;
-  cout << "  analog fw size: " << oa_size << endl << endl;
-  cout << "+ DIGITAL EXPANSION fw update saved on file:" << endl;
-  cout << "  ---> " << fileOutDigital << endl;
-  cout << "  digital fw size: " << od_size << endl << endl;
+  unsigned char *rv = new unsigned char[fsize];
+  if (rv == NULL) {
+    cout << "ERROR Unable to allocate memory... Exit" << endl;
+    exit(1);
+  }
+  size_t blocks_read = fread(rv, fsize, 1, fp);
+  if (blocks_read != 1) {
+    cout << "ERROR! Unable to read all the file" << endl;
+    exit(2);
+  }
+  fclose(fp);
+  return rv;
+}
+
+/* -------------------------------------------------------------------------- */
+int main(int argc, char *argv[]) {
+  int exp_type = 0;
+  unsigned char fw_version_major = 0;
+  unsigned char fw_version_minor = 0;
+  unsigned char fw_version_release = 0;
+  
+  char *outfilename = (char *)fileOutDefault;
+  char *expname = (char *)nameDefault;
+  
+  string filename;
+  uint32_t fsize = 0;
+  
+  unsigned char *fcontent = nullptr;
+  
+
+  cout << "*** Opta Fw Update Maker ***" << endl;
+  cout << endl;
+  cout << "This program packs an Expansions fw into .h files" << endl;
+  cout << endl;
+
+  while (1) {
+
+    bool good = false;
+    exp_type = select_expansion(good);
+    if(!good) {
+      continue;
+    }
+
+    if(exp_type == 0) {
+      break;
+    }
+
+    if(!print_expansion_selection(exp_type)) {
+      continue;
+    }
+    
+    fw_version_major = get_version_digit("MAJOR");
+    fw_version_minor = get_version_digit("MINOR");
+    fw_version_release = get_version_digit("RELEASE");
+
+    cout << "*** You entered the FW version: " << (int)fw_version_major << "."
+         << (int)fw_version_minor << "." << (int)fw_version_release << endl;
+
+    fsize = 0;
+    get_fw_filename(filename,fsize);
+    if(fcontent != nullptr) {
+      delete []fcontent;
+      fcontent = nullptr;
+    }
+    fcontent = read_fw_filename(filename, fsize);
+
+    if (exp_type == EXP_TYPE_ANALOG) {
+      outfilename = (char *)fileOutAnalog;
+      expname = (char *)nameAnalog;
+    } else if (exp_type == EXP_TYPE_DIGITAL) {
+      outfilename = (char *)fileOutDigital;
+      expname = (char *)nameDigital;
+    } else if (exp_type == EXP_TYPE_CELLULAR) {
+      outfilename = (char *)fileOutCellular;
+      expname = (char *)nameCellular;
+    } 
+    
+    if (!write_update(outfilename, exp_type, fw_version_major,
+                      fw_version_minor, fw_version_release, fcontent,
+                      fsize)) {
+      cout << "ERROR Unable to write update on file " << outfilename << endl;
+      exit(3);
+    }
+    else {
+      cout << expname << " EXPANSION fw update saved on file:" << endl;
+      cout << "  ---> " << outfilename << endl;
+      cout << "  FW size: " << fsize << endl << endl;
+    }
+  }
 }

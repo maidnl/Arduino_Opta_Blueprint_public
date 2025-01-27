@@ -145,6 +145,25 @@ bool isUpdatable(int device) {
    return rv;
 }
 
+#ifdef UPDATE_ARDUINO_OPTA_CELLULAR
+/* look for an Opta Cellular and if present send the command to disable 
+   the modem*/
+static void find_opta_cellular() {
+   Serial.println("Looking for Opta Cellular...");
+   for (int i = 0; i < OptaController.getExpansionNum(); i++) {
+      CellularExpansion ce = OptaController.getExpansion(i);
+      if(ce) {
+        Serial.print("  - OPTA CELLULAR FOUND @ index ");
+        Serial.println(i);
+        /* disable the modem */
+        Serial.println("  - Disable modem")
+        ce.ctrlModem(false);
+        break;
+      }
+   }
+}
+#endif
+
 #ifdef ASK_FOR_FW_UPDATE
 bool ask_for_confirmation(int i) {
 
@@ -274,6 +293,10 @@ void setup() {
   OptaController.begin();
 
   delay(2000); 
+
+  #ifdef UPDATE_ARDUINO_OPTA_CELLULAR
+  find_opta_cellular();
+  #endif
 }
 
 /* -------------------------------------------------------------------------- */

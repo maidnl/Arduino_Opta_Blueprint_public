@@ -3,21 +3,31 @@
    AUTHOR:      Daniele Aimo
    EMAIL:       d.aimo@arduino.cc
    DATE:        20240115
-   DESCRIPTION: 
+   DESCRIPTION: This sketch updates Opta Expansions. 
+                Follow instruction on the Serial Monitor.
    LICENSE:     Copyright (c) 2024 Arduino SA
                 This Source Code Form is subject to the terms fo the Mozilla
                 Public License (MPL), v 2.0. You can obtain a copy of the MPL
                 at http://mozilla.org/MPL/2.0/.
-   NOTES:                                                                     */
+   NOTES:       If you are using also an Opta Cellular you can update also this
+                device from this sketch. In this case uncomment the  
+                #define UPDATE_ARDUINO_OPTA_CELLULAR
+                here below                                                    */
 /* -------------------------------------------------------------------------- */
+
+/* !!!!! if you have an Opta Cellular un-comment the following define */
+//#define UPDATE_ARDUINO_OPTA_CELLULAR
 
 #include "OptaBlue.h"
 #include "utility/BossaOpta.h"
 #include "fwUpdateDigital.h"
 #include "fwUpdateAnalog.h"
+#ifdef UPDATE_ARDUINO_OPTA_CELLULAR
 #include "fwUpdateCellular.h"
-#include "BossaArduino.h"
 #include "CellularExpansion.h"
+#endif
+#include "BossaArduino.h"
+
 
 /* if this is defined the sketch will ask for a confirmation via serial to 
  * actually perform the fw update */
@@ -46,12 +56,14 @@ static unsigned char od_m = opta_digital_fw_update[od_fw_size + 2];
 static unsigned char od_r = opta_digital_fw_update[od_fw_size + 3];
 static unsigned int  od_version = od_M * 255 + od_m * 255 + od_r;
 
+#ifdef UPDATE_ARDUINO_OPTA_CELLULAR
 static uint32_t oc_fw_size = sizeof(opta_cellular_fw_update) - 4;
 static unsigned char oc_type = opta_cellular_fw_update[oc_fw_size];
 static unsigned char oc_M = opta_cellular_fw_update[oc_fw_size + 1];
 static unsigned char oc_m = opta_cellular_fw_update[oc_fw_size + 2];
 static unsigned char oc_r = opta_cellular_fw_update[oc_fw_size + 3];
 static unsigned int  oc_version = oc_M * 255 + oc_m * 255 + oc_r;
+#endif
 
 /* print the expansion type */
 void printExpansionType(ExpansionType_t t) {
@@ -70,9 +82,11 @@ void printExpansionType(ExpansionType_t t) {
   else if(t == EXPANSION_OPTA_ANALOG) {
     Serial.print("Opta ~~~ ANALOG ~~~ ");
   }
+  #ifdef UPDATE_ARDUINO_OPTA_CELLULAR
   else if (t == OptaController.getExpansionType(CellularExpansion::getProduct())) {
     Serial.print("Opta ~~~ CELLULAR ~~~ ");
   }
+  #endif
   else {
     Serial.print("Unknown!");
   }
@@ -109,11 +123,14 @@ bool isUpdatable(int device) {
          if(oa_version > current_version ) {
             rv = true;
          }
-      } else if(OptaController.getExpansionType(CellularExpansion::getProduct()) == type) {
+      } 
+      #ifdef UPDATE_ARDUINO_OPTA_CELLULAR
+      else if(OptaController.getExpansionType(CellularExpansion::getProduct()) == type) {
          if(oc_version > current_version ) {
             rv = true;
          }
       }
+      #endif
    } else {
       Serial.println("WARNING: unable to get current FW version!");
    }
@@ -173,10 +190,13 @@ void updateTask() {
                } else if(EXPANSION_OPTA_ANALOG == type) {
                   fw = (unsigned char *)opta_analog_fw_update;
                   sz = oa_fw_size;
-               } else if (type == OptaController.getExpansionType(CellularExpansion::getProduct())) {
+               } 
+               #ifdef UPDATE_ARDUINO_OPTA_CELLULAR
+               else if (type == OptaController.getExpansionType(CellularExpansion::getProduct())) {
                   fw = (unsigned char *)opta_cellular_fw_update;
                   sz = oc_fw_size;
                }
+               #endif
                
                if(sz == 0 || fw == nullptr) {
                   continue;
@@ -226,9 +246,11 @@ void updateTask() {
 /* -------------------------------------------------------------------------- */
 void setup() {
 /* -------------------------------------------------------------------------- */    
+  #ifdef UPDATE_ARDUINO_OPTA_CELLULAR
   OptaController.registerCustomExpansion(CellularExpansion::getProduct(),
                                          CellularExpansion::makeExpansion,
                                          CellularExpansion::startUp);
+  #endif
 
   Serial.begin(115200);
   while(!Serial) {
@@ -241,9 +263,11 @@ void setup() {
 
   Serial.print("  - OPTA ** ANALOG ** to version: ");
   printVersion(oa_M, oa_m, oa_r);
-
+  
+  #ifdef UPDATE_ARDUINO_OPTA_CELLULAR
   Serial.print("  - OPTA ** CELLULAR ** to version: ");
   printVersion(oc_M, oc_m, oc_r);
+  #endif
 
   delay(1000);
 

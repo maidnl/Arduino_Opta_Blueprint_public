@@ -288,14 +288,13 @@ void setup() {
   printVersion(oc_M, oc_m, oc_r);
   #endif
 
-  delay(1000);
-
   OptaController.begin();
 
-  delay(2000); 
+  delay(1000); 
 
   #ifdef UPDATE_ARDUINO_OPTA_CELLULAR
   find_opta_cellular();
+  delay(500);
   #endif
 }
 
